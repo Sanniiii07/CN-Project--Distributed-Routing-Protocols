@@ -1,0 +1,4 @@
+router_app.exe
+*.o
+logs/*.log
+.vscode/
