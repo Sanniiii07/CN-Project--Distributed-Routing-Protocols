@@ -1,8 +1,10 @@
 """
 Routing Table Module for Distributed Routing Protocols.
 Stores destination routes, costs (metrics), next hops, and update timestamps.
+Supports clean table display and JSON serialization for network exchange.
 """
 
+import json
 import time
 from typing import Dict, List, Optional, Any
 
@@ -34,6 +36,15 @@ class RouteEntry:
         self.next_hop = next_hop
         self.last_updated = timestamp if timestamp is not None else time.time()
         return changed
+
+    def to_dict(self) -> dict:
+        """Returns the route entry as a dictionary."""
+        return {
+            "destination": self.destination,
+            "cost": self.cost,
+            "next_hop": self.next_hop,
+            "last_updated": round(self.last_updated, 2)
+        }
 
     def __repr__(self) -> str:
         return (
@@ -110,6 +121,37 @@ class RoutingTable:
         """Returns a sorted list of all known destination IDs."""
         return sorted(self._table.keys())
 
+    def get_vector(self) -> Dict[str, float]:
+        """
+        Returns the Distance Vector dictionary {destination: cost}.
+        This is the payload advertised to neighbouring routers.
+        """
+        return {dest: entry.cost for dest, entry in self._table.items()}
+
+    def to_dict(self) -> dict:
+        """Converts the full table into a dictionary structure."""
+        return {
+            "owner_id": self.owner_id,
+            "routes": {dest: entry.to_dict() for dest, entry in self._table.items()}
+        }
+
+    def to_json(self, indent: int = 2) -> str:
+        """Serializes the routing table to a JSON-formatted string."""
+        return json.dumps(self.to_dict(), indent=indent)
+
+    def display(self) -> None:
+        """Prints the routing table in a clean, human-readable format."""
+        print(f"\n--- Routing Table (Router {self.owner_id}) ---")
+        print(f"{'Destination':<14} {'Cost':<10} {'Next Hop':<12} {'Age':<10}")
+        print("-" * 48)
+        now = time.time()
+        for dest in self.get_all_destinations():
+            entry = self._table[dest]
+            cost_str = str(int(entry.cost)) if entry.cost.is_integer() else f"{entry.cost:.1f}"
+            age_str = f"{now - entry.last_updated:.1f}s ago"
+            print(f"{dest:<14} {cost_str:<10} {entry.next_hop:<12} {age_str:<10}")
+        print("-" * 48)
+
     def __len__(self) -> int:
         return len(self._table)
 
@@ -121,25 +163,20 @@ class RoutingTable:
 
 
 if __name__ == "__main__":
-    print(f"=== Routing Table Demonstration (Commit 01) ===")
+    print("=== Routing Table Display & Serialization (Commit 02) ===")
     table = RoutingTable(owner_id="R1")
-    print(f"Initialized table for {table.owner_id}:")
-    print(" ", table.get_route("R1"))
-
-    print("\n1. Storing routes to R2 and R3:")
     table.update_route("R2", cost=2.0, next_hop="R2")
     table.update_route("R3", cost=5.0, next_hop="R2")
-    print("  R2 ->", table.get_route("R2"))
-    print("  R3 ->", table.get_route("R3"))
+    table.update_route("R4", cost=8.0, next_hop="R2")
 
-    print("\n2. Retrieving route attributes:")
-    print(f"  Cost to R3: {table.get_cost('R3')}")
-    print(f"  Next hop to R3: {table.get_next_hop('R3')}")
+    print("\n1. Formatted Table Display:")
+    table.display()
 
-    print("\n3. Updating route to R3 (cheaper path via R2 discovered):")
-    time.sleep(0.05)
-    changed = table.update_route("R3", cost=3.0, next_hop="R2")
-    print(f"  Route changed: {changed}")
-    print("  Updated R3 ->", table.get_route("R3"))
-    print(f"  New Cost to R3: {table.get_cost('R3')}")
-    print("\nVisible result: Route successfully stored, updated, and retrieved!")
+    print("\n2. Distance Vector Payload (for sharing with neighbors):")
+    vector = table.get_vector()
+    print(" ", vector)
+
+    print("\n3. JSON Serialization:")
+    print(table.to_json())
+
+    print("\nVisible result: Routing table can be formatted cleanly and serialized for network transmission!")
