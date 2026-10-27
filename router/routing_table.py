@@ -1,12 +1,15 @@
 """
 Routing Table Module for Distributed Routing Protocols.
 Stores destination routes, costs (metrics), next hops, and update timestamps.
-Supports clean table display and JSON serialization for network exchange.
+Supports clean table display, JSON serialization, and unreachable route handling.
 """
 
 import json
 import time
 from typing import Dict, List, Optional, Any
+
+# Standard routing metric infinity (RIP convention: 16 is unreachable)
+INFINITY: float = 16.0
 
 
 class RouteEntry:
@@ -16,41 +19,47 @@ class RouteEntry:
         self,
         destination: str,
         cost: float,
-        next_hop: str,
+        next_hop: Optional[str],
         last_updated: Optional[float] = None
     ):
         self.destination = str(destination)
         self.cost = float(cost)
-        self.next_hop = str(next_hop)
+        self.next_hop = str(next_hop) if next_hop is not None else None
         self.last_updated = last_updated if last_updated is not None else time.time()
 
-    def update(self, cost: float, next_hop: str, timestamp: Optional[float] = None) -> bool:
+    def update(self, cost: float, next_hop: Optional[str], timestamp: Optional[float] = None) -> bool:
         """
         Updates the route's cost and next hop.
         Returns True if the cost or next hop actually changed.
         """
         cost = float(cost)
-        next_hop = str(next_hop)
-        changed = (self.cost != cost or self.next_hop != next_hop)
+        next_hop_str = str(next_hop) if next_hop is not None else None
+        changed = (self.cost != cost or self.next_hop != next_hop_str)
         self.cost = cost
-        self.next_hop = next_hop
+        self.next_hop = next_hop_str
         self.last_updated = timestamp if timestamp is not None else time.time()
         return changed
+
+    def is_reachable(self) -> bool:
+        """Returns True if the destination is reachable (cost < INFINITY)."""
+        return self.cost < INFINITY
 
     def to_dict(self) -> dict:
         """Returns the route entry as a dictionary."""
         return {
             "destination": self.destination,
-            "cost": self.cost,
+            "cost": self.cost if self.cost < INFINITY else "INF",
             "next_hop": self.next_hop,
+            "reachable": self.is_reachable(),
             "last_updated": round(self.last_updated, 2)
         }
 
     def __repr__(self) -> str:
+        cost_display = f"{self.cost:.1f}" if self.cost < INFINITY else "INF"
         return (
             f"RouteEntry(destination='{self.destination}', "
-            f"cost={self.cost}, next_hop='{self.next_hop}', "
-            f"last_updated={self.last_updated:.2f})"
+            f"cost={cost_display}, next_hop='{self.next_hop}', "
+            f"reachable={self.is_reachable()})"
         )
 
 
@@ -70,7 +79,7 @@ class RoutingTable:
         self,
         destination: str,
         cost: float,
-        next_hop: str,
+        next_hop: Optional[str],
         timestamp: Optional[float] = None
     ) -> bool:
         """
@@ -79,39 +88,48 @@ class RoutingTable:
         """
         destination = str(destination)
         cost = float(cost)
-        next_hop = str(next_hop)
+        next_hop_str = str(next_hop) if next_hop is not None else None
 
         if destination in self._table:
-            return self._table[destination].update(cost, next_hop, timestamp)
+            return self._table[destination].update(cost, next_hop_str, timestamp)
 
         self._table[destination] = RouteEntry(
             destination=destination,
             cost=cost,
-            next_hop=next_hop,
+            next_hop=next_hop_str,
             last_updated=timestamp
         )
         return True
+
+    def mark_unreachable(self, destination: str, timestamp: Optional[float] = None) -> bool:
+        """Marks a destination as unreachable (cost = INFINITY, next_hop = None)."""
+        return self.update_route(destination, cost=INFINITY, next_hop=None, timestamp=timestamp)
+
+    def is_reachable(self, destination: str) -> bool:
+        """Returns True if destination is known and has cost < INFINITY."""
+        route = self._table.get(destination)
+        return route is not None and route.is_reachable()
 
     def get_route(self, destination: str) -> Optional[RouteEntry]:
         """Retrieves the RouteEntry for a destination, or None if not present."""
         return self._table.get(destination)
 
     def get_cost(self, destination: str) -> float:
-        """Returns the cost to destination, or float('inf') if unreachable/unknown."""
+        """Returns the cost to destination, or INFINITY if unreachable/unknown."""
         route = self._table.get(destination)
-        return route.cost if route is not None else float("inf")
+        return route.cost if route is not None else INFINITY
 
     def get_next_hop(self, destination: str) -> Optional[str]:
-        """Returns the next hop router ID for destination, or None if unknown."""
+        """Returns the next hop router ID for destination, or None if unknown/unreachable."""
         route = self._table.get(destination)
         return route.next_hop if route is not None else None
 
     def has_route(self, destination: str) -> bool:
-        """Checks if a route exists for the destination."""
+        """Checks if a route entry exists for the destination."""
         return destination in self._table
 
     def remove_route(self, destination: str) -> bool:
-        """Removes a destination from the routing table. Returns True if removed."""
+        """Removes a destination from the routing table completely."""
         if destination in self._table:
             del self._table[destination]
             return True
@@ -124,9 +142,12 @@ class RoutingTable:
     def get_vector(self) -> Dict[str, float]:
         """
         Returns the Distance Vector dictionary {destination: cost}.
-        This is the payload advertised to neighbouring routers.
+        Destinations with cost >= INFINITY are capped at INFINITY.
         """
-        return {dest: entry.cost for dest, entry in self._table.items()}
+        return {
+            dest: (entry.cost if entry.cost < INFINITY else INFINITY)
+            for dest, entry in self._table.items()
+        }
 
     def to_dict(self) -> dict:
         """Converts the full table into a dictionary structure."""
@@ -142,15 +163,20 @@ class RoutingTable:
     def display(self) -> None:
         """Prints the routing table in a clean, human-readable format."""
         print(f"\n--- Routing Table (Router {self.owner_id}) ---")
-        print(f"{'Destination':<14} {'Cost':<10} {'Next Hop':<12} {'Age':<10}")
-        print("-" * 48)
-        now = time.time()
+        print(f"{'Destination':<14} {'Cost':<12} {'Next Hop':<12} {'Status':<14}")
+        print("-" * 52)
         for dest in self.get_all_destinations():
             entry = self._table[dest]
-            cost_str = str(int(entry.cost)) if entry.cost.is_integer() else f"{entry.cost:.1f}"
-            age_str = f"{now - entry.last_updated:.1f}s ago"
-            print(f"{dest:<14} {cost_str:<10} {entry.next_hop:<12} {age_str:<10}")
-        print("-" * 48)
+            if entry.cost >= INFINITY:
+                cost_str = f"{int(INFINITY)} (INF)"
+                hop_str = "-"
+                status_str = "UNREACHABLE"
+            else:
+                cost_str = str(int(entry.cost)) if entry.cost.is_integer() else f"{entry.cost:.1f}"
+                hop_str = entry.next_hop if entry.next_hop else "-"
+                status_str = "REACHABLE"
+            print(f"{dest:<14} {cost_str:<12} {hop_str:<12} {status_str:<14}")
+        print("-" * 52)
 
     def __len__(self) -> int:
         return len(self._table)
@@ -160,23 +186,3 @@ class RoutingTable:
 
     def __repr__(self) -> str:
         return f"RoutingTable(owner='{self.owner_id}', routes={list(self._table.values())})"
-
-
-if __name__ == "__main__":
-    print("=== Routing Table Display & Serialization (Commit 02) ===")
-    table = RoutingTable(owner_id="R1")
-    table.update_route("R2", cost=2.0, next_hop="R2")
-    table.update_route("R3", cost=5.0, next_hop="R2")
-    table.update_route("R4", cost=8.0, next_hop="R2")
-
-    print("\n1. Formatted Table Display:")
-    table.display()
-
-    print("\n2. Distance Vector Payload (for sharing with neighbors):")
-    vector = table.get_vector()
-    print(" ", vector)
-
-    print("\n3. JSON Serialization:")
-    print(table.to_json())
-
-    print("\nVisible result: Routing table can be formatted cleanly and serialized for network transmission!")
