@@ -2,7 +2,7 @@
 Distance Vector Routing Protocol Implementation.
 Uses the Bellman-Ford algorithm to compute shortest paths based on
 distance vectors received from direct neighbours.
-Handles unreachable destinations using metric limits (INFINITY = 16) and link failure.
+Includes unreachable route handling (INFINITY = 16) and Split Horizon loop prevention.
 """
 
 import os
@@ -16,17 +16,29 @@ if PROJECT_ROOT not in sys.path:
 
 from router.routing_table import RoutingTable, INFINITY
 
+# Loop prevention mode constants
+LOOP_PREVENTION_NONE = "NONE"
+LOOP_PREVENTION_SPLIT_HORIZON = "SPLIT_HORIZON"
+LOOP_PREVENTION_POISONED_REVERSE = "POISONED_REVERSE"
+
 
 class DistanceVectorNode:
     """
     A Distance Vector routing engine for a single router.
     Calculates candidate route costs using the Bellman-Ford equation:
       D_x(y) = min_v { c(x, v) + D_v(y) }
-    Handles unreachable destinations (cost >= 16) and link failures.
+    Supports Split Horizon to prevent routing loops between adjacent nodes.
     """
 
-    def __init__(self, router_id: str, neighbours: Optional[Dict[str, float]] = None):
+    def __init__(
+        self,
+        router_id: str,
+        neighbours: Optional[Dict[str, float]] = None,
+        loop_prevention: str = LOOP_PREVENTION_NONE
+    ):
         self.router_id = str(router_id)
+        self.loop_prevention = loop_prevention.upper()
+
         # Direct link costs to active neighbours: {neighbour_id: link_cost}
         self.neighbours: Dict[str, float] = {}
         if neighbours:
@@ -155,38 +167,59 @@ class DistanceVectorNode:
 
         return changed
 
-    def get_outgoing_vector(self) -> Dict[str, float]:
+    def get_outgoing_vector(self, for_neighbour: Optional[str] = None) -> Dict[str, float]:
         """
         Returns the Distance Vector to advertise to neighbours.
-        Destinations that are unreachable are advertised with cost INFINITY (16).
+        Supports Split Horizon:
+        - If loop_prevention is SPLIT_HORIZON and for_neighbour is specified,
+          any route whose next hop is for_neighbour is omitted.
         """
-        return self.routing_table.get_vector()
+        base_vector = self.routing_table.get_vector()
+
+        if for_neighbour is None or self.loop_prevention == LOOP_PREVENTION_NONE:
+            return base_vector
+
+        for_neighbour = str(for_neighbour)
+        outgoing_vector: Dict[str, float] = {}
+
+        for dest, cost in base_vector.items():
+            next_hop = self.routing_table.get_next_hop(dest)
+
+            # Split Horizon rule: Do not advertise a route back to its next-hop neighbour
+            if self.loop_prevention == LOOP_PREVENTION_SPLIT_HORIZON and next_hop == for_neighbour:
+                # Omit this route from the vector sent to for_neighbour
+                continue
+
+            outgoing_vector[dest] = cost
+
+        return outgoing_vector
 
 
 if __name__ == "__main__":
-    print("=== Unreachable Destination & Metric Limits Demo (Commit 04) ===")
-    print("Topology: R1 --- (cost 2) --- R2 --- (cost 3) --- R3")
+    print("=== Split Horizon Loop Prevention Demo (Commit 05) ===")
+    print("Scenario: R1 --- (cost 2) --- R2 --- (cost 3) --- R3")
+    print("R1 routes traffic to R3 THROUGH next-hop R2.")
 
-    # Step 1: Initialize R1 and R2
-    node_r1 = DistanceVectorNode("R1", neighbours={"R2": 2.0})
+    # Initialize R1 with Split Horizon enabled
+    node_r1 = DistanceVectorNode(
+        router_id="R1",
+        neighbours={"R2": 2.0, "Other": 10.0},
+        loop_prevention=LOOP_PREVENTION_SPLIT_HORIZON
+    )
 
-    # R2 knows R3 with cost 3, advertises to R1
+    # R1 learns route to R3 via R2
     node_r1.receive_vector("R2", {"R2": 0.0, "R3": 3.0})
-    print("\n1. Routing table at R1 when network is healthy:")
-    node_r1.routing_table.display()
-    print(f"Is R3 reachable from R1? {node_r1.routing_table.is_reachable('R3')}")
 
-    # Step 2: Link between R2 and R3 fails!
-    # R2 now advertises R3 as unreachable (cost 16 / INFINITY) to R1
-    print("\n2. Link between R2 and R3 fails. R2 sends updated vector with R3=16 (INF):")
-    node_r1.receive_vector("R2", {"R2": 0.0, "R3": INFINITY})
+    print("\nR1 Routing Table:")
     node_r1.routing_table.display()
-    print(f"Is R3 reachable from R1? {node_r1.routing_table.is_reachable('R3')}")
 
-    # Step 3: Direct link between R1 and R2 fails!
-    print("\n3. Direct link R1 --- R2 fails:")
-    node_r1.fail_link("R2")
-    node_r1.routing_table.display()
-    print(f"Is R2 reachable from R1? {node_r1.routing_table.is_reachable('R2')}")
+    print("\n1. Vector R1 advertises to 'Other' (which is NOT the next hop):")
+    vector_for_other = node_r1.get_outgoing_vector(for_neighbour="Other")
+    print(" ", vector_for_other)
 
-    print("\nVisible result: Unreachable destinations are correctly marked as INF (16) rather than remaining reachable forever!")
+    print("\n2. Vector R1 advertises to 'R2' (which IS the next hop for R3):")
+    vector_for_r2 = node_r1.get_outgoing_vector(for_neighbour="R2")
+    print(" ", vector_for_r2)
+
+    print("\nNotice: R3 is omitted from the vector sent to R2 because R1 learned R3 via R2!")
+    print("Visible result: Split Horizon omits routes learned from that neighbour!")
