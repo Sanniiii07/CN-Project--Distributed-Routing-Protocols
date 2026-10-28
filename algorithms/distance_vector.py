@@ -2,7 +2,8 @@
 Distance Vector Routing Protocol Implementation.
 Uses the Bellman-Ford algorithm to compute shortest paths based on
 distance vectors received from direct neighbours.
-Includes unreachable route handling (INFINITY = 16) and Split Horizon loop prevention.
+Includes unreachable route handling (INFINITY = 16), Split Horizon,
+and Poisoned Reverse loop prevention.
 """
 
 import os
@@ -27,7 +28,7 @@ class DistanceVectorNode:
     A Distance Vector routing engine for a single router.
     Calculates candidate route costs using the Bellman-Ford equation:
       D_x(y) = min_v { c(x, v) + D_v(y) }
-    Supports Split Horizon to prevent routing loops between adjacent nodes.
+    Supports Split Horizon and Poisoned Reverse to prevent routing loops.
     """
 
     def __init__(
@@ -170,9 +171,9 @@ class DistanceVectorNode:
     def get_outgoing_vector(self, for_neighbour: Optional[str] = None) -> Dict[str, float]:
         """
         Returns the Distance Vector to advertise to neighbours.
-        Supports Split Horizon:
-        - If loop_prevention is SPLIT_HORIZON and for_neighbour is specified,
-          any route whose next hop is for_neighbour is omitted.
+        Supports:
+        - Split Horizon: Omits routes whose next hop is for_neighbour.
+        - Poisoned Reverse: Advertises routes whose next hop is for_neighbour with cost 16 (INFINITY).
         """
         base_vector = self.routing_table.get_vector()
 
@@ -185,10 +186,15 @@ class DistanceVectorNode:
         for dest, cost in base_vector.items():
             next_hop = self.routing_table.get_next_hop(dest)
 
-            # Split Horizon rule: Do not advertise a route back to its next-hop neighbour
-            if self.loop_prevention == LOOP_PREVENTION_SPLIT_HORIZON and next_hop == for_neighbour:
-                # Omit this route from the vector sent to for_neighbour
-                continue
+            # Check if this route is forwarded through for_neighbour
+            if next_hop == for_neighbour and dest != for_neighbour:
+                if self.loop_prevention == LOOP_PREVENTION_SPLIT_HORIZON:
+                    # Split Horizon: Omit route completely
+                    continue
+                elif self.loop_prevention == LOOP_PREVENTION_POISONED_REVERSE:
+                    # Poisoned Reverse: Advertise with metric INFINITY (16)
+                    outgoing_vector[dest] = INFINITY
+                    continue
 
             outgoing_vector[dest] = cost
 
@@ -196,15 +202,15 @@ class DistanceVectorNode:
 
 
 if __name__ == "__main__":
-    print("=== Split Horizon Loop Prevention Demo (Commit 05) ===")
+    print("=== Poisoned Reverse Loop Prevention Demo (Commit 06) ===")
     print("Scenario: R1 --- (cost 2) --- R2 --- (cost 3) --- R3")
     print("R1 routes traffic to R3 THROUGH next-hop R2.")
 
-    # Initialize R1 with Split Horizon enabled
+    # Initialize R1 with Poisoned Reverse enabled
     node_r1 = DistanceVectorNode(
         router_id="R1",
         neighbours={"R2": 2.0, "Other": 10.0},
-        loop_prevention=LOOP_PREVENTION_SPLIT_HORIZON
+        loop_prevention=LOOP_PREVENTION_POISONED_REVERSE
     )
 
     # R1 learns route to R3 via R2
@@ -213,13 +219,13 @@ if __name__ == "__main__":
     print("\nR1 Routing Table:")
     node_r1.routing_table.display()
 
-    print("\n1. Vector R1 advertises to 'Other' (which is NOT the next hop):")
+    print("\n1. Vector R1 advertises to 'Other' (which is NOT next-hop):")
     vector_for_other = node_r1.get_outgoing_vector(for_neighbour="Other")
     print(" ", vector_for_other)
 
-    print("\n2. Vector R1 advertises to 'R2' (which IS the next hop for R3):")
+    print("\n2. Vector R1 advertises to 'R2' (which IS next-hop for R3):")
     vector_for_r2 = node_r1.get_outgoing_vector(for_neighbour="R2")
     print(" ", vector_for_r2)
 
-    print("\nNotice: R3 is omitted from the vector sent to R2 because R1 learned R3 via R2!")
-    print("Visible result: Split Horizon omits routes learned from that neighbour!")
+    print(f"\nNotice: In the vector sent to R2, R3 is advertised with cost {vector_for_r2.get('R3')} (INFINITY)!")
+    print("Visible result: Poisoned Reverse advertises next-hop routes with metric 16 (unreachable)!")
