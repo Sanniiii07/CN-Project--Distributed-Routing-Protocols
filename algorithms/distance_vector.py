@@ -3,7 +3,7 @@ Distance Vector Routing Protocol Implementation.
 Uses the Bellman-Ford algorithm to compute shortest paths based on
 distance vectors received from direct neighbours.
 Includes unreachable route handling (INFINITY = 16), Split Horizon,
-and Poisoned Reverse loop prevention.
+Poisoned Reverse, and UDP message creation/processing.
 """
 
 import os
@@ -199,6 +199,33 @@ class DistanceVectorNode:
             outgoing_vector[dest] = cost
 
         return outgoing_vector
+
+    def create_advertisement(self, for_neighbour: Optional[str] = None) -> dict:
+        """
+        Creates a JSON-serializable DV_UPDATE message dictionary.
+        This matches the UDP messaging interface agreed for the project.
+        """
+        return {
+            "type": "DV_UPDATE",
+            "sender": self.router_id,
+            "vector": self.get_outgoing_vector(for_neighbour=for_neighbour)
+        }
+
+    def process_advertisement(self, message: dict) -> bool:
+        """
+        Processes an incoming DV_UPDATE message dictionary received over UDP.
+        Returns True if the routing table changed.
+        """
+        if not isinstance(message, dict) or message.get("type") != "DV_UPDATE":
+            return False
+
+        sender = message.get("sender")
+        vector = message.get("vector")
+
+        if not sender or not isinstance(vector, dict):
+            return False
+
+        return self.receive_vector(str(sender), vector)
 
 
 if __name__ == "__main__":
