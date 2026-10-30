@@ -10,9 +10,9 @@ This document discloses the use of AI tools in the development of the **Distribu
 AI assistance was utilized for:
 - Code review and debugging existing repository inconsistencies.
 - Explaining computer networking concepts (Path Vector, BGP-style AS-Path loop detection, event engines, Dijkstra differences).
-- Generating test boilerplate and test suite validation (`tests/test_path_vector.py`, `tests/test_event_engine.py`).
-- Structuring modular file interfaces for dynamic network events, convergence timelines, and comparative protocol benchmarks (`experiments/run_experiments.py`).
+- Generating test boilerplate and test suite validation (`tests/test_path_vector.py`, `tests/test_event_engine.py`, `tests/test_scenarios.py`).
+- Structuring modular file interfaces for dynamic network events, convergence timelines, comparative protocol benchmarks (`experiments/run_experiments.py`), and anomaly demonstrations (`events/scenarios.py`).
 
 ## 3. Human Authorship & Contribution Verification
-- Core protocol logic, loop rejection algorithms, dynamic topology event scheduling (link failures, router crashes, cost changes), convergence anomaly detection, and convergence benchmarking were reviewed, verified, and integrated by **Sreejita** (Path Vector routing, Event Engine, Convergence Visualization, Comparative Experiments).
-- Existing teammate contributions (Naitik's C network architecture, Sagar's Link State router) were preserved without unauthorized overwrites.
+- Core protocol logic, loop rejection algorithms, dynamic topology event scheduling (link failures, router crashes, cost changes), convergence anomaly detection, benchmarking, and network anomaly scenarios (transient loops, black holes, link flapping) were reviewed, verified, and integrated by **Sreejita** (Path Vector routing, Event Engine, Convergence Visualization, Comparative Experiments, Anomaly Scenarios).
+- Existing teammate contributions (Naitik's C network architecture, Sagar's Link State router, Sanniva's Distance Vector protocol) were preserved without unauthorized overwrites.
