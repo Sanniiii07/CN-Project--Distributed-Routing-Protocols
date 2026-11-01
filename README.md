@@ -8,7 +8,7 @@ A distributed routing system simulating independent router processes communicati
 
 | Member | Main Ownership | Key Files & Modules |
 | :--- | :--- | :--- |
-| **Naitik** *(Member 1)* | Topology loader, router infrastructure, C transport | `config/topology.conf`, `router/router.c`, `router/network.c`, `router/messages.c` |
+| **Naitik** *(Member 1)* | Topology loader, router infrastructure, C transport, launcher | `config/topology.conf`, `config/topology_loader.py`, `router/router.c`, `router/network.c`, `router/messages.c`, `start_all_routers.bat`, `start_all_routers.py` |
 | **Sanniva** *(Member 2)* | **Distance Vector (Bellman-Ford)**, Split Horizon, Poisoned Reverse, Count-to-Infinity | `algorithms/distance_vector.py`, `router/routing_table.py`, `router/dv_router.py`, `experiments/count_to_infinity.py`, `tests/test_distance_vector.py` |
 | **Sagar** *(Member 3)* | **Link State**, LSA flooding, sequence numbers, Dijkstra | `algorithms/link_state.py`, `algorithms/dijkstra.py`, `router.py`, `test_dijkstra.py` |
 | **Sreejita** *(Member 4)* | **Path Vector**, dynamic event engine, visualization, benchmarks | `algorithms/path_vector.py`, `router/pv_router.py`, `events/`, `visualization/`, `experiments/run_experiments.py` |
@@ -43,15 +43,41 @@ CN-Project--Distributed-Routing-Protocols/
 │   ├── test_path_vector.py     # Unit tests for Path Vector routing
 │   ├── test_pv_router_udp.py   # 4-router UDP integration test
 │   ├── test_event_engine.py    # Unit tests for event injection
-│   └── test_scenarios.py       # Unit tests for network anomaly scenarios
-└── config/
-    ├── topology.conf           # C-style configuration
-    └── topology.txt            # Python plain-text edge list
+│   ├── test_scenarios.py       # Unit tests for network anomaly scenarios
+│   └── test_topology_loader.py # 8 unit tests for topology configuration loader
+├── config/
+│   ├── topology.conf           # C-style configuration
+│   ├── topology.txt            # Python plain-text edge list
+│   └── topology_loader.py      # Shared Python topology & port loader module
+├── start_all_routers.py        # One-command process launcher (C/Python routers)
+├── start_all_routers.bat       # Windows 1-click batch launcher for 4 router windows
+└── start.bat                   # Quick launcher shortcut
 ```
 
 ---
 
 ## 🚀 Quick Start & Execution Guide
+
+### 0. Launch All 4 Routers in Separate Terminal Windows (One Command)
+Start independent router instances (`R1`, `R2`, `R3`, `R4`) in their own dedicated console windows with one command:
+
+**Option A: Windows Batch Launcher (Double-click or run):**
+```powershell
+.\start_all_routers.bat
+# Or simply:
+.\start.bat
+```
+
+**Option B: Python Cross-Platform Launcher:**
+```powershell
+# Launch C Winsock routers (router_app.exe)
+python start_all_routers.py --mode c
+
+# Launch Python Distance Vector routers
+python start_all_routers.py --mode dv
+```
+
+---
 
 ### 1. Run the Count-to-Infinity Experiment (Distance Vector)
 Simulates link failure on a 3-node linear network ($A \longleftrightarrow B \longleftrightarrow C$) and compares convergence across three modes:
@@ -93,7 +119,7 @@ python events/scenarios.py
 
 ## 🧪 Running Unit & Integration Tests
 
-The project includes an automated test suite containing **24 tests** across all modules.
+The project includes an automated test suite containing **36 tests** across all modules.
 
 ### Run All Tests:
 ```powershell

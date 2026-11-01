@@ -2,41 +2,35 @@ import heapq
 
 
 def read_topology(filename):
-    graph = {}
-
-    with open(filename, "r", encoding="utf-8") as file:
-        for line_number, line in enumerate(file, start=1):
-            line = line.strip()
-
-            if not line or line.startswith("#"):
-                continue
-
-            parts = line.split()
-
-            if len(parts) != 3:
-                raise ValueError(
-                    f"Invalid topology at line {line_number}: {line}"
-                )
-
-            a, b, cost_text = parts
-
-            try:
-                cost = float(cost_text)
-            except ValueError:
-                raise ValueError(
-                    f"Invalid link cost at line {line_number}: {cost_text}"
-                )
-
-            if cost < 0:
-                raise ValueError("Dijkstra requires non-negative link costs.")
-
-            graph.setdefault(a, {})
-            graph.setdefault(b, {})
-
-            graph[a][b] = cost
-            graph[b][a] = cost
-
-    return graph
+    """Reads topology using shared topology_loader with legacy fallback."""
+    try:
+        from config.topology_loader import load_topology
+        topo = load_topology(filename)
+        return topo.get_adjacency_list()
+    except Exception:
+        graph = {}
+        with open(filename, "r", encoding="utf-8") as file:
+            for line_number, line in enumerate(file, start=1):
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split()
+                if len(parts) == 4 and parts[0].upper() == "LINK":
+                    parts = parts[1:]
+                if len(parts) != 3:
+                    raise ValueError(f"Invalid topology at line {line_number}: {line}")
+                a, b, cost_text = parts
+                try:
+                    cost = float(cost_text)
+                except ValueError:
+                    raise ValueError(f"Invalid link cost at line {line_number}: {cost_text}")
+                if cost < 0:
+                    raise ValueError("Dijkstra requires non-negative link costs.")
+                graph.setdefault(a, {})
+                graph.setdefault(b, {})
+                graph[a][b] = cost
+                graph[b][a] = cost
+        return graph
 
 
 def dijkstra(graph, source):

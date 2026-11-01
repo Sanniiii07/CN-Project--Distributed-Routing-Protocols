@@ -25,16 +25,15 @@ from algorithms.distance_vector import (
 )
 
 HOST: str = "127.0.0.1"
-DEFAULT_PORT_MAP: Dict[str, int] = {
-    "R1": 5001,
-    "R2": 5002,
-    "R3": 5003,
-    "R4": 5004,
-    "A": 5001,
-    "B": 5002,
-    "C": 5003,
-    "D": 5004,
-}
+# Dynamically loaded via shared topology loader
+try:
+    from config.topology_loader import get_port_map
+    DEFAULT_PORT_MAP: Dict[str, int] = get_port_map()
+except Exception:
+    DEFAULT_PORT_MAP: Dict[str, int] = {
+        "R1": 5001, "R2": 5002, "R3": 5003, "R4": 5004,
+        "A": 5001, "B": 5002, "C": 5003, "D": 5004,
+    }
 BUFFER_SIZE: int = 65535
 
 

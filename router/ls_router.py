@@ -7,7 +7,12 @@ import heapq
 import os
 
 HOST = "127.0.0.1"
-PORT_MAP = {"A": 5001, "B": 5002, "C": 5003, "D": 5004}
+# Dynamically loaded via shared topology loader
+try:
+    from config.topology_loader import get_port_map
+    PORT_MAP = get_port_map()
+except Exception:
+    PORT_MAP = {"A": 5001, "B": 5002, "C": 5003, "D": 5004}
 LSA_INTERVAL = 15
 LSA_TIMEOUT = 40
 BUFFER_SIZE = 65535
