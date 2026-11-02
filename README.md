@@ -4,7 +4,7 @@ A distributed routing system simulating independent router processes communicati
 
 ---
 
-## 👥 Team & Ownership
+## Team & Ownership
 
 | Member | Main Ownership | Key Files & Modules |
 | :--- | :--- | :--- |
@@ -15,7 +15,7 @@ A distributed routing system simulating independent router processes communicati
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```text
 CN-Project--Distributed-Routing-Protocols/
@@ -56,7 +56,7 @@ CN-Project--Distributed-Routing-Protocols/
 
 ---
 
-## 🚀 Quick Start & Execution Guide
+## Quick Start & Execution Guide
 
 ### 0. Launch All 4 Routers in Separate Terminal Windows (One Command)
 Start independent router instances (`R1`, `R2`, `R3`, `R4`) in their own dedicated console windows with one command:
@@ -117,7 +117,7 @@ python events/scenarios.py
 
 ---
 
-## 🧪 Running Unit & Integration Tests
+##  Running Unit & Integration Tests
 
 The project includes an automated test suite containing **36 tests** across all modules.
 
@@ -142,7 +142,7 @@ Distance Vector tests verify:
 
 ---
 
-## 🧠 Key Concepts & Theoretical Principles
+##  Key Concepts & Theoretical Principles
 
 ### 1. Bellman-Ford Equation
 Each router $x$ updates its estimated distance to destination $y$ based on the vectors advertised by direct neighbours $v$:
